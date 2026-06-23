@@ -2,14 +2,30 @@ import numpy as np
 import cv2
 
 
+def get_layer_recursive(model, layer_name):
+    try:
+        return model.get_layer(layer_name)
+    except ValueError:
+        # Search inside nested layers/models
+        for layer in getattr(model, "layers", []):
+            if hasattr(layer, "layers"):
+                try:
+                    return get_layer_recursive(layer, layer_name)
+                except ValueError:
+                    pass
+        raise ValueError(f"No layer named {layer_name} found in model.")
+
+
 def make_gradcam_heatmap(img_array, model, last_conv_layer):
     # Import TensorFlow lazily to avoid import-time side effects during tests
     import tensorflow as tf
 
+    target_layer = get_layer_recursive(model, last_conv_layer)
+
     grad_model = tf.keras.models.Model(
         [model.inputs],
         [
-            model.get_layer(last_conv_layer).output,
+            target_layer.output,
             model.output,
         ],
     )

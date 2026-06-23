@@ -96,13 +96,13 @@ def preprocess_image(image_path: str) -> np.ndarray:
 # Prediction
 # ---------------------------------------------------------------------------
 
-def predict_image(image_path: str, model_path: str | None = None) -> dict:
+def predict_image(image_source: str | bytes, model_path: str | None = None) -> dict:
     """Run deepfake detection on a single image.
 
     Parameters
     ----------
-    image_path:
-        Path to the image to classify.
+    image_source:
+        Path to the image to classify (str), or raw image bytes (bytes).
     model_path:
         Optional override for the model file location.
 
@@ -115,7 +115,7 @@ def predict_image(image_path: str, model_path: str | None = None) -> dict:
     Raises
     ------
     FileNotFoundError
-        When *image_path* does not exist on disk.
+        When *image_source* is a path and does not exist on disk.
     ValueError
         When the file extension is not supported.
     PreprocessingError
@@ -123,7 +123,16 @@ def predict_image(image_path: str, model_path: str | None = None) -> dict:
     ModelExecutionError
         When model inference fails.
     """
-    image = preprocess_image(image_path)
+    if isinstance(image_source, bytes):
+        try:
+            image = preprocess_image_bytes(image_source)
+        except Exception as e:
+            logger.error(f"Image preprocessing failed for bytes: {e}", exc_info=True)
+            raise PreprocessingError(f"Failed to preprocess image: {str(e)}") from e
+        image_path_display = "Uploaded Image"
+    else:
+        image = preprocess_image(image_source)
+        image_path_display = image_source
 
     try:
         model = load_deepfake_model(model_path)
@@ -140,7 +149,7 @@ def predict_image(image_path: str, model_path: str | None = None) -> dict:
     label = "Fake" if class_index == 1 else "Real"
 
     return {
-        "image": image_path,
+        "image": image_path_display,
         "label": label,
         "confidence": round(confidence, 1),
         "raw": prediction[0].tolist(),

@@ -117,6 +117,9 @@ def load_deepfake_model():
 # import this module without wanting heavy model-loading side effects.
 model = None
 
+if __name__ == "__main__":
+    model = load_deepfake_model()
+
 
 def render_missing_model_help():
     st.error(f"Model file '{MODEL_PATH}' not found in the current directory.")
@@ -291,9 +294,8 @@ with col_right:
 
             # ---------------- Grad-CAM ----------------
             try:
-                backbone_model = model.layers[0]
-                last_conv_layer = find_last_conv_layer(backbone_model)
-                heatmap = make_gradcam_heatmap(processed_image, backbone_model, last_conv_layer)
+                last_conv_layer = find_last_conv_layer(model)
+                heatmap = make_gradcam_heatmap(processed_image, model, last_conv_layer)
                 gradcam_image = overlay_heatmap(image, heatmap)
             except Exception as e:
                 logger.warning(f"Grad-CAM visualization failed: {e}", exc_info=True)

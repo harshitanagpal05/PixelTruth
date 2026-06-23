@@ -339,3 +339,57 @@ class TestLowConfidenceThreshold:
         assert confidence >= app.LOW_CONFIDENCE_THRESHOLD, (
             f"confidence={confidence} should be >= threshold={app.LOW_CONFIDENCE_THRESHOLD}"
         )
+
+
+# ---------------------------------------------------------------------------
+# Lazy model loading, API/bytes prediction, and recursive layer lookup tests
+# ---------------------------------------------------------------------------
+
+class TestLazyModelAndBytesPipeline:
+
+    def test_predict_image_with_bytes(self):
+        """predict_image from predict.py should handle bytes inputs directly."""
+        import predict
+        from unittest.mock import patch, MagicMock
+
+        ok, encoded = cv2.imencode(".png", make_blank_image())
+        assert ok
+        image_bytes = encoded.tobytes()
+
+        mock_model = MagicMock()
+        mock_model.predict.return_value = np.array([[0.85, 0.15]])
+
+        with patch("predict.load_deepfake_model", return_value=mock_model):
+            result = predict.predict_image(image_bytes)
+
+        assert result["image"] == "Uploaded Image"
+        assert result["label"] == "Real"
+        assert result["confidence"] == 85.0
+        assert result["raw"] == [0.85, 0.15]
+
+    def test_get_layer_recursive(self):
+        """get_layer_recursive should locate a layer inside nested/sub-models."""
+        from gradcam import get_layer_recursive
+        from unittest.mock import MagicMock
+
+        mock_layer = MagicMock()
+        mock_layer.name = "conv_target"
+
+        mock_submodel = MagicMock()
+        def sub_get_layer(name):
+            if name == "conv_target":
+                return mock_layer
+            raise ValueError()
+        mock_submodel.get_layer = sub_get_layer
+        mock_submodel.layers = [mock_layer]
+
+        mock_main_model = MagicMock()
+        def main_get_layer(name):
+            raise ValueError()
+        mock_main_model.get_layer = main_get_layer
+        mock_main_model.layers = [mock_submodel]
+
+        found_layer = get_layer_recursive(mock_main_model, "conv_target")
+        assert found_layer == mock_layer
+        assert found_layer.name == "conv_target"
+
